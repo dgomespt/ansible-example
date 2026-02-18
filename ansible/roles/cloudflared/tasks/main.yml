@@ -1,0 +1,14 @@
+- name: Install cloudflared
+  apt:
+    deb: https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+
+- name: Install cloudflared tunnel service
+  command: cloudflared service install {{ cloudflared_token }}
+  args:
+    creates: /etc/systemd/system/cloudflared.service
+
+- name: Ensure cloudflared is running
+  systemd:
+    name: cloudflared
+    enabled: yes
+    state: started

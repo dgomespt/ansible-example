@@ -1,0 +1,11 @@
+---
+- name: Bootstrap Vagrant
+  hosts: vagrant
+  become: yes
+
+  roles:
+    - common
+    - docker
+    - tailscale
+    - cloudflared
+    - reboot

@@ -1,0 +1,11 @@
+---
+- name: Bootstrap a real server
+  hosts: a_real_server
+  become: yes
+
+  roles:
+    - common
+    - docker
+    - tailscale
+    - cloudflared
+    - reboot

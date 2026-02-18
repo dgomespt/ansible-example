@@ -1,0 +1,32 @@
+---
+- name: Install Tailscale
+  shell: |
+    curl -fsSL https://tailscale.com/install.sh | sh
+  args:
+    creates: /usr/sbin/tailscale
+
+- name: Enable tailscaled
+  service:
+    name: tailscaled
+    state: started
+    enabled: yes
+
+- name: Wait for tailscaled socket
+  wait_for:
+    path: /var/run/tailscale/tailscaled.sock
+    timeout: 60
+
+- name: Check Tailscale status
+  command: tailscale status --json
+  register: ts_status
+  changed_when: false
+  failed_when: false
+
+- name: Bring node up into tailnet
+  command: >
+    tailscale up
+    --authkey={{ tailscale_authkey }}
+    --ssh
+    --accept-routes
+    --hostname={{ inventory_hostname }}
+  when: ts_status.stdout is not search('"BackendState":"Running"')
