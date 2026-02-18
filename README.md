@@ -56,7 +56,8 @@ cd vagrant
 vagrant ssh-config
 ```
 
-Then change `ansible/inventory.ini` accordingly to use host, port and the ssh key
+Then rename `ansible/inventory.ini.example` to `inventory.ini` and change accordingly to use host, port and the ssh key from vagrant ssh-config.
+
 It should look similar to this:
 ```
 [vagrant]
