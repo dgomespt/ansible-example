@@ -1,158 +1,157 @@
 # Ansible Example
 
-This project is the result of my efforts in automating a linux machine.
+This project automates hardening and provisioning of Ubuntu servers via Ansible. It includes a Vagrant-based local development environment for safe testing before deploying to real machines.
 
-> Don't expect this to be fully functional or 100% correct and production worthy. Suggestions are welcomed!
+What this setup does:
 
-I included a vagrant example with ubuntu so you can test it locally before you think about using it on real machines.
-
-This setup will do some common tasks for you:
-
-- Upgrade the system
-- Install base packages
-- Enable automatic security upgrades
-- Enable Firewall: 
-    - Close everything
-    - Open SSH, HTTP and HTTPS ports
+- Upgrades the system
+- Installs base packages
+- Enables automatic security upgrades
+- Configures UFW firewall (deny all, allow SSH/HTTP/HTTPS)
 - Enables fail2ban
-- Installs docker
-- Reboots machine if needed
+- Installs Docker
+- Reboots if required after updates
 
-And some optional roles can be tested too:
-- Install and setup tailscale
-- Install cloudflared and setup tunnel
+Optional roles:
+- Install and configure Tailscale
+- Install Cloudflared and set up a tunnel
 
-### Requirements
+## Requirements
 
-- Virtualbox or other virtualization solution of your preference.
+- Ubuntu (or other Debian-based Linux) as the **control machine** where Ansible runs
+- VirtualBox (for local Vagrant testing)
 - Vagrant
 - Ansible
 
-#### Windows
+### Install required software (Ubuntu/Debian)
 
-If you're using Windows you need to enable WSL first and install Virtualbox on your host (not on WSL).
+On the control machine (or WSL), install Ansible, Vagrant, and VirtualBox:
 
-Then, while on WSL, you need to enable access from vagrant to virtualbox.
+```bash
+# Update system and install Ansible
+sudo apt update
+sudo apt install -y software-properties-common
+sudo apt-add-repository --yes --update ppa:ansible/ansible
+sudo apt install -y ansible
 
-This will enable permanently:
-```
-echo "export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1 >> ~/.bash_profile
-source ~/.bash_profile
-```
-If you prefer to do it only for the current session just do:
+# Install Vagrant
+# Option A: use HashiCorp repo (recommended for latest stable)
+curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update
+sudo apt install -y vagrant
 
-```
-export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS="1"
-```
+# Option B: or use distro package (may be older)
+# sudo apt install -y vagrant
 
-# Ansible
+# Install VirtualBox
+# Option A: use official repo (recommended for latest stable)
+curl -fsSL https://www.virtualbox.org/download/oracle_vbox_2016.asc | sudo gpg --dearmor -o /usr/share/keyrings/oracle-virtualbox-2016.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/oracle-virtualbox-2016.gpg] http://download.virtualbox.org/virtualbox/debian $(lsb_release -cs) contrib" | sudo tee /etc/apt/sources.list.d/virtualbox.list
+sudo apt update
+sudo apt install -y virtualbox-7.1  # or virtualbox-7.0 / virtualbox-6.1
 
-## Set up
-
-### Inventory
-To check the data needed for ansible to connect, run the following from your WSL terminal:
-```
-cd vagrant
-vagrant ssh-config
-```
-
-Then rename `ansible/inventory.ini.example` to `inventory.ini` and change accordingly to use host, port and the ssh key from vagrant ssh-config.
-
-It should look similar to this:
-```
-[vagrant]
-default ansible_host={vagrant_ip} ansible_port={vagrant_port} ansible_user=vagrant ansible_ssh_private_key_file={IdentityFile path}
+# Option B: distro package (may be older)
+# sudo apt install -y virtualbox
 ```
 
-### Optional roles
-You can enable tailscale and cloudflare setup and configuration. Just uncomment the roles from `ansible/playbooks/bootstrap_vagrant.yml` if you wish to test them locally or just use the `bootstrap_a_real_server.yml` when you're ready to provision a real machine.
+Verify installations:
 
-### Using this in a real VPS/Server
-
-You will have to add an inventory group the machine connection entry.
-Add to `ansible/inventory.ini` like so:
-
-```
-[a_real_server]
-default ansible_host={IP of your real machine} ansible_port=2222 ansible_user={the username} ansible_ssh_private_key_file={path_to_private_key}
+```bash
+ansible --version
+vagrant --version
+vboxmanage --version
 ```
 
-The **a_real_server** group matches the `bootstrap_a_real_server` playbook. You can rename as you please, as long as ansible knows how to connect to the machine.
+### Windows (WSL)
 
-You can also change the **hostname** from default, or add others. Just bare in mind that you need to name the vault file accordingly unders **ansible/host_vars** 
+If using WSL, install Ansible and Vagrant inside WSL and **VirtualBox on the Windows host** — see `docs/windows-instructions.md` for the full Windows + WSL workflow and required host/guest setup.
 
-### Vault secrets
-This example includes both tailscale and cloudflared tunnel setup.
-If you wish to use either, you will have to setup two keys inside a vault
+## Quick Start (Local Testing with Vagrant)
 
-```
+1. Start the VM:
+   ```bash
+   cd vagrant
+   vagrant up
+   ```
+
+2. Get connection details for the inventory:
+   ```bash
+   cd vagrant
+   vagrant ssh-config
+   ```
+
+3. Create the inventory file (copy from example):
+   ```bash
+   cd ansible
+   cp inventory.ini.example inventory.ini
+   ```
+   Edit `inventory.ini` with the host, port, and SSH key path from `vagrant ssh-config`.
+
+4. Run the playbook:
+   ```bash
+   cd ansible
+   ansible-playbook -i inventory.ini playbooks/bootstrap_vagrant.yml --ask-vault-pass
+   ```
+   (Omit `--ask-vault-pass` if you don't use Tailscale/Cloudflared roles.)
+
+5. Clean up:
+   ```bash
+   cd vagrant
+   vagrant destroy -f
+   ```
+   If you hit SSH key issues after destroy, run:
+   ```bash
+   ssh-keygen -f "~/.ssh/known_hosts" -R "[172.29.112.1]:2222"
+   ```
+
+## Using on a Real Server
+
+1. Add your server to `ansible/inventory.ini`:
+   ```ini
+   [a_real_server]
+   yoursrv ansible_host=1.2.3.4 ansible_port=22 ansible_user=youruser ansible_ssh_private_key_file=/path/to/key
+   ```
+
+2. Run the real-server playbook:
+   ```bash
+   cd ansible
+   ansible-playbook -i inventory.ini playbooks/bootstrap_a_real_server.yml --ask-vault-pass
+   ```
+
+The inventory group name (`a_real_server`) must match the `hosts:` value in the playbook.
+
+## Vault Secrets
+
+Tailscale and Cloudflared require encrypted variables:
+
+```bash
 cd ansible
 ansible-vault create host_vars/{hostname}.yml
 ```
-> For single host setup, you can use `default` hostname.
 
-You will be asked to provide a password for encrypting/decrypting. Note it down.
-On the editor, create the entries:
-
-```
-tailscale_authkey: [your tailscape auth token]
-cloudflared_token: [your Cloudflare ZeroTrust Connection token]
+For a host named `default`:
+```yaml
+tailscale_authkey: <your_tailscale_auth_token>
+cloudflared_token: <your_cloudflare_tunnel_token>
 ```
 
-If you need to change these values later, you can run:
-`ansible-vault edit host_vars/default.yml`
+The vault filename is derived from `inventory_hostname`. Omit `--ask-vault-pass` if you have no optional roles enabled.
 
+## Project Structure
 
-## Run the playbook!
-Finally, you're ready to test it out.
+- `ansible/` — All Ansible content; must run playbooks from here (`.cfg` sets `roles_path = ./roles`)
+- `ansible/roles/` — Role definitions; executed in order: common → docker → tailscale → cloudflared → reboot
+- `vagrant/` — Local VM definition and provisioning helper scripts
 
-If you enabled `tailscale` or `cloudflare` roles, run:
+See `AGENTS.md` for detailed agent-oriented guidance.
 
-```
-cd ansible
-ansible-playbook -i inventory.ini playbooks/bootstrap.yml --ask-vault-pass
-```
-> You can use `--vault-password-file=/path/to/vault_password.txt` and put your vault password in a file somewhere in your home folder so you don't have to type it everytime.
+# Troubleshooting
 
-If no vault secrets are involved
-
-```
-cd ansible
-ansible-playbook -i inventory.ini playbooks/bootstrap.yml
-```
-
-Then just sit back and wait. The process may take a while to finish.
-
-You should see something like the following at the end of the run:
-
-```
-PLAY RECAP *****************************************************************************************************
-default                    : ok=21   changed=13   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
-```
-
-And that's it. Your machine should be upgraded and "hardened" with some base packages installed + docker. If you added tailscale and/or cloudflare correcty they should now appear on their respective dashboards.
-
-Run the playbook as many times as you wish. That's the whole point - to keep your system up to date.
-
-# Troubleshooting:
-
-### Vagrant
-
-#### SSH issues
-If you destroy the vagrant machine and run again you will most likely run into an issue with ssh key. You should clear your `known_hosts` file first:
-
-> replace IP and port according to your configuration
-
-`ssh-keygen -f '~/.ssh/known_hosts' -R '[172.29.112.1]:2222'`
-
-# Cleaning up
-
-When you're done experimenting with vagrant you can destroy your machine:
-
-```
-cd vagrant
-vagrant destroy -f
-```
-
-If you used tailscale and/or cloudflared cleanup via the service dashboard.
+- **SSH issues after `vagrant destroy`** — Clear known_hosts entry for the VM IP/port:
+  ```bash
+  ssh-keygen -f ~/.ssh/known_hosts -R "[192.168.56.10]:22"
+  ```
+- **Playbook run from wrong directory** — Always `cd ansible` first; roles won't resolve from repo root.
+- **Missing vault secrets** — If enabling Tailscale/Cloudflared and the playbook fails on missing vars, ensure `host_vars/{hostname}.yml` exists and is encrypted, and pass `--ask-vault-pass`.
 
